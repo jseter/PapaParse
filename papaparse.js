@@ -189,7 +189,9 @@ License: MIT
 
 	function CsvToJson(_input, _config)
 	{
-		_config = _config || {};
+		var _originalConfig = _config;
+		_config = _originalConfig ? shallowCopyObject(_originalConfig) : {};
+
 		var dynamicTyping = _config.dynamicTyping || false;
 		if (isFunction(dynamicTyping)) {
 			_config.dynamicTypingFunction = dynamicTyping;
@@ -1528,9 +1530,16 @@ License: MIT
 							continue;
 						}
 
+						var nextCursor = (quoteSearch + 1);
+						if(nextDelim < nextCursor) {
+							nextDelim = input.indexOf(delim, nextCursor);
+						}
+						if(nextNewline < nextCursor) {
+							nextNewline = input.indexOf(newline, nextCursor);
+						}
 						// Check up to nextDelim or nextNewline, whichever is closest
 						var checkUpTo = nextNewline === -1 ? nextDelim : Math.min(nextDelim, nextNewline);
-						var spacesBetweenQuoteAndDelimiter = extraSpaces(checkUpTo);
+						var spacesBetweenQuoteAndDelimiter = extraSpaces(quoteSearch + 1, checkUpTo);
 
 						// Closing quote followed by delimiter or 'unnecessary spaces + delimiter'
 						if (input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter] === delim)
@@ -1548,7 +1557,7 @@ License: MIT
 							break;
 						}
 
-						var spacesBetweenQuoteAndNewLine = extraSpaces(nextNewline);
+						var spacesBetweenQuoteAndNewLine = extraSpaces(quoteSearch + 1, nextNewline);
 
 						// Closing quote followed by newline or 'unnecessary spaces + newLine'
 						if (input.substr(quoteSearch + 1 + spacesBetweenQuoteAndNewLine, newlineLen) === newline)
@@ -1662,10 +1671,10 @@ License: MIT
              * checks if there are extra spaces after closing quote and given index without any text
              * if Yes, returns the number of spaces
              */
-			function extraSpaces(index) {
+			function extraSpaces(indexStart, indexEnd) {
 				var spaceLength = 0;
-				if (index !== -1) {
-					var textBetweenClosingQuoteAndIndex = input.substring(quoteSearch + 1, index);
+				if (indexEnd !== -1) {
+					var textBetweenClosingQuoteAndIndex = input.substring(indexStart, indexEnd);
 					if (textBetweenClosingQuoteAndIndex && textBetweenClosingQuoteAndIndex.trim() === '') {
 						spaceLength = textBetweenClosingQuoteAndIndex.length;
 					}
@@ -1879,14 +1888,98 @@ License: MIT
 		}
 	}
 
+	var __hasOwnProperty = Object.prototype.hasOwnProperty;
+
+	var MapConstructor = (function() {
+		if(typeof Map !== "undefined") {
+			return Map; // eslint-disable-line no-undef
+		}
+
+		function ArrayMap() {
+			this._keys = [];
+			this._values = [];
+		}
+
+		ArrayMap.prototype.get = function(key) {
+			var mapKeys = this._keys;
+			var mapValues = this._values;
+			var index = mapKeys.indexOf(key);
+			if(index < 0) {
+				return undefined;
+			}
+			return mapValues[index];
+		};
+
+		ArrayMap.prototype.set = function(key, value) {
+			var mapKeys = this._keys;
+			var mapValues = this._values;
+			var index = mapKeys.indexOf(key);
+			if(index < 0) {
+				index = mapKeys.length;
+				mapKeys[index] = key;
+			}
+			mapValues[index] = value;
+		};
+
+		return ArrayMap;
+	})();
+
 	/** Makes a deep copy of an array or object (mostly) */
-	function copy(obj)
+	function copy(_obj)
 	{
-		if (typeof obj !== 'object' || obj === null)
-			return obj;
-		var cpy = Array.isArray(obj) ? [] : {};
-		for (var key in obj)
-			cpy[key] = copy(obj[key]);
+		/** @type Map<any> */
+		var map = new MapConstructor();
+
+		return innerCopy(_obj);
+
+
+		function innerCopy(obj) {
+			var cache;
+
+			if (typeof obj !== 'object' || obj === null)
+				return obj;
+
+			cache = map.get(obj);
+			if(cache !== undefined) {
+				return cache;
+			}
+
+			if(Array.isArray(obj)) {
+				return copyArray(obj);
+			} else {
+				return copyObject(obj);
+			}
+		}
+
+		function copyArray(obj) {
+			var cpy = [], i;
+			map.set(obj, cpy);
+			var objLength = obj.length;
+			for(i = 0; i < objLength; ++i) {
+				cpy[i] = innerCopy(obj[i]);
+			}
+			return cpy;
+		}
+
+		function copyObject(obj) {
+			var cpy = {}, key;
+			map.set(obj, cpy);
+			for (key in obj) {
+				if(__hasOwnProperty.call(obj, key)) {
+					cpy[key] = innerCopy(obj[key]);
+				}
+			}
+			return cpy;
+		}
+	}
+
+	function shallowCopyObject() {
+		var cpy = {}, key;
+		for (key in obj) {
+			if(__hasOwnProperty.call(obj, key)) {
+				cpy[key] = obj[key];
+			}
+		}
 		return cpy;
 	}
 

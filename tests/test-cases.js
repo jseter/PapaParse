@@ -22,6 +22,95 @@ try {
 	XHR_ENABLED = true;
 } catch (e) {} // safari, ie
 
+var hasOwnProperty = (function() {
+	"use strict";
+
+	var __hasOwnProperty = Object.prototype.hasOwnProperty;
+	function hasOwnProperty(target, prop) {
+		return __hasOwnProperty.call(target, prop);
+	}
+	return hasOwnProperty;
+})();
+
+var assign = (function() {
+	"use strict";
+
+	var assign = Object.assign;
+	if(typeof assign !== "function") {
+		assign = function(target, _args) {
+			var dest = Object(target);
+			var length = arguments.length;
+			for(var index = 1; index < length; ++index) {
+				var arg = arguments[index];
+				if(arg === null || arg === undefined) {
+					continue;
+				}
+				var source = arg;
+
+				for(var prop in source) {
+					if(!hasOwnProperty(source, prop)) {
+						continue;
+					}
+					dest[prop] = source[prop];
+				}
+			}
+			return dest;
+		};
+	}
+	return assign;
+})();
+
+
+function wrapError(error) {
+	if(error) {
+		return error;
+	}
+	return { error: error };
+}
+
+(function() {
+	before(function() {
+		updateStringSubstring();
+	});
+
+	after(function() {
+		restoreStringSubstring();
+	});
+
+	function updateStringSubstring() {
+		var __substring = String.prototype.substring;
+
+		var substring = function(indexStart, indexEnd) {
+			var limit = this.length;
+			if(indexStart < 0 || indexStart > limit) {
+				throw new TypeError("indexStart is less than zero or greater than target length.");
+			}
+			if(indexEnd !== undefined) {
+				if(indexEnd < 0 || indexEnd > limit) {
+					throw new TypeError("indexStart is less than zero or greater than target length.");
+				}
+
+				if(indexStart > indexEnd) {
+					throw new TypeError("indexStart is greater than indexEnd.");
+				}
+			}
+			return __substring.call(this, indexStart, indexEnd);
+		};
+		substring.__substring = __substring;
+
+		String.prototype.substring = substring; // eslint-disable-line no-extend-native
+	}
+
+	function restoreStringSubstring() {
+		var substring = String.prototype.substring;
+		if(!hasOwnProperty(substring, "__substring")) {
+			return;
+		}
+		var __substring = substring.__substring;
+		String.prototype.substring = __substring; // eslint-disable-line no-extend-native
+	}
+})();
+
 // Tests for the core parser using new Papa.Parser().parse() (CSV to JSON)
 var CORE_PARSER_TESTS = [
 	{
@@ -1553,19 +1642,31 @@ var PARSE_ASYNC_TESTS = [
 describe('Parse Async Tests', function() {
 	function generateTest(test) {
 		(test.disabled ? it.skip : it)(test.description, function(done) {
-			var config = test.config;
+			try {
+				var synchronousDone = false;
+				var config = assign({}, test.config);
 
-			config.complete = function(actual) {
-				assert.deepEqual(JSON.stringify(actual.errors), JSON.stringify(test.expected.errors));
-				assert.deepEqual(actual.data, test.expected.data);
-				done();
-			};
+				config.complete = function(actual) {
+					try {
+						assert.equal(synchronousDone, true, "Async completed synchronously");
+						assert.deepEqual(JSON.stringify(actual.errors), JSON.stringify(test.expected.errors));
+						assert.deepEqual(actual.data, test.expected.data);
+					} catch(error) {
+						done(wrapError(error));
+						return;
+					}
+					done(null);
+				};
 
-			config.error = function(err) {
-				throw err;
-			};
+				config.error = function(error) {
+					done(wrapError(error));
+				};
 
-			Papa.parse(test.input, config);
+				Papa.parse(test.input, config);
+				synchronousDone = true;
+			} catch(error) {
+				done(wrapError(error));
+			}
 		});
 	}
 
@@ -1865,12 +1966,14 @@ var CUSTOM_TESTS = [
 					stepped++;
 					if (results)
 					{
-						parser.pause();
-						parser.resume();
 						if (results.data && stepped % 200 === 0) {
 							dataRows.push(results.data);
 						}
 					}
+					parser.pause();
+					setImmediate(function() {
+						parser.resume();
+					});
 				},
 				complete: function() {
 					output.push(stepped);
