@@ -1358,12 +1358,15 @@ License: MIT
 
 		function addError(type, code, msg, row)
 		{
-			_results.errors.push({
+			var error = {
 				type: type,
 				code: code,
-				message: msg,
-				row: row
-			});
+				message: msg
+			};
+			if(row !== undefined) {
+				error.row = row;
+			}
+			_results.errors.push(error);
 		}
 	}
 
@@ -1539,47 +1542,50 @@ License: MIT
 						}
 						// Check up to nextDelim or nextNewline, whichever is closest
 						var checkUpTo = nextNewline === -1 ? nextDelim : Math.min(nextDelim, nextNewline);
-						var spacesBetweenQuoteAndDelimiter = extraSpaces(quoteSearch + 1, checkUpTo);
+						if(checkUpTo >= 0) {
+							var spacesBetweenQuoteAndDelimiter = extraSpaces(quoteSearch + 1, checkUpTo);
 
-						// Closing quote followed by delimiter or 'unnecessary spaces + delimiter'
-						if (input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter] === delim)
-						{
-							row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar));
-							cursor = quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen;
-
-							// If char after following delimiter is not quoteChar, we find next quote char position
-							if (input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen] !== quoteChar)
+							// Closing quote followed by delimiter or 'unnecessary spaces + delimiter'
+							if (input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter] === delim)
 							{
-								quoteSearch = input.indexOf(quoteChar, cursor);
+								row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar));
+								cursor = quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen;
+
+								// If char after following delimiter is not quoteChar, we find next quote char position
+								if (input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen] !== quoteChar)
+								{
+									quoteSearch = input.indexOf(quoteChar, cursor);
+								}
+								nextDelim = input.indexOf(delim, cursor);
+								nextNewline = input.indexOf(newline, cursor);
+								break;
 							}
-							nextDelim = input.indexOf(delim, cursor);
-							nextNewline = input.indexOf(newline, cursor);
-							break;
 						}
 
-						var spacesBetweenQuoteAndNewLine = extraSpaces(quoteSearch + 1, nextNewline);
+						if(nextNewline >= 0) {
+							var spacesBetweenQuoteAndNewLine = extraSpaces(quoteSearch + 1, nextNewline);
 
-						// Closing quote followed by newline or 'unnecessary spaces + newLine'
-						if (input.substr(quoteSearch + 1 + spacesBetweenQuoteAndNewLine, newlineLen) === newline)
-						{
-							row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar));
-							saveRow(quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen);
-							nextDelim = input.indexOf(delim, cursor);	// because we may have skipped the nextDelim in the quoted field
-							quoteSearch = input.indexOf(quoteChar, cursor);	// we search for first quote in next line
-
-							if (stepIsFunction)
+							// Closing quote followed by newline or 'unnecessary spaces + newLine'
+							if (input.substr(quoteSearch + 1 + spacesBetweenQuoteAndNewLine, newlineLen) === newline)
 							{
-								doStep();
-								if (aborted)
-									return returnable();
+								row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar));
+								saveRow(quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen);
+								nextDelim = input.indexOf(delim, cursor);	// because we may have skipped the nextDelim in the quoted field
+								quoteSearch = input.indexOf(quoteChar, cursor);	// we search for first quote in next line
+
+								if (stepIsFunction)
+								{
+									doStep();
+									if (aborted)
+										return returnable();
+								}
+
+								if (preview && data.length >= preview)
+									return returnable(true);
+
+								break;
 							}
-
-							if (preview && data.length >= preview)
-								return returnable(true);
-
-							break;
 						}
-
 
 						// Checks for valid closing quotes are complete (escaped quotes or quote followed by EOF/delimiter/newline) -- assume these quotes are part of an invalid text string
 						errors.push({
@@ -1973,7 +1979,7 @@ License: MIT
 		}
 	}
 
-	function shallowCopyObject() {
+	function shallowCopyObject(obj) {
 		var cpy = {}, key;
 		for (key in obj) {
 			if(__hasOwnProperty.call(obj, key)) {
