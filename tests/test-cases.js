@@ -744,10 +744,26 @@ var PARSE_TESTS = [
 		}
 	},
 	{
+		description: "Quoted fields with spaces between closing quote and next delimiter and contains delimiter",
+		input: 'A,"B," ,C,D\r\nE,F,"G,"  ,H',
+		expected: {
+			data: [['A', 'B,', 'C','D'],['E', 'F', 'G,','H']],
+			errors: []
+		}
+	},
+	{
 		description: "Quoted fields with spaces between closing quote and next new line",
 		input: 'A,B,C,"D" \r\nE,F,G,"H"  \r\nQ,W,E,R',
 		expected: {
 			data: [['A', 'B', 'C','D'],['E', 'F', 'G','H'],['Q', 'W', 'E','R']],
+			errors: []
+		}
+	},
+	{
+		description: "Quoted fields with spaces between closing quote and next new line and contains newline",
+		input: 'A,B,C,"D\r\n" \r\nE,F,G,"H\r\n"  \r\nQ,W,E,R',
+		expected: {
+			data: [['A', 'B', 'C','D\r\n'],['E', 'F', 'G','H\r\n'],['Q', 'W', 'E','R']],
 			errors: []
 		}
 	},
@@ -1968,9 +1984,9 @@ var CUSTOM_TESTS = [
 						}
 					}
 					parser.pause();
-					setImmediate(function() {
+					setTimeout(function() {
 						parser.resume();
-					});
+					}, 0);
 				},
 				complete: function() {
 					output.push(stepped);
